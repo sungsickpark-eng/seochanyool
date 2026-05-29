@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>선생님을 피해서 계단 올라가기</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    overflow:hidden;
+    background:#111;
+    font-family:sans-serif;
+}
+
+canvas{
+    display:block;
+    margin:auto;
+    background:#87ceeb;
+}
+
+#ui{
+    position:absolute;
+    top:10px;
+    left:10px;
+    color:white;
+    font-size:22px;
+    font-weight:bold;
+    text-shadow:2px 2px 4px black;
+}
+
+#startScreen,
+#endScreen{
+    position:absolute;
+    width:100%;
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    background:rgba(0,0,0,0.7);
+    color:white;
+    z-index:10;
+}
+
+button{
+    margin-top:20px;
+    padding:15px 30px;
+    font-size:20px;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    background:#ffcc00;
+    font-weight:bold;
+}
+
+button:hover{
+    background:#ffdd33;
+}
+
+h1{
+    font-size:50px;
+    margin-bottom:20px;
+    text-align:center;
+}
+
+p{
+    font-size:24px;
+    text-align:center;
+}
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+    거리: <span id="distance">0</span>m
+</div>
+
+<div id="startScreen">
+    <h1>🏃 선생님을 피해서 계단 올라가기</h1>
+    <p>선생님에게 잡히지 말고 집까지 도망쳐라!</p>
+    <button onclick="startGame()">게임 시작</button>
+</div>
+
+<div id="endScreen" style="display:none;">
+    <h1 id="endTitle"></h1>
+    <p id="endText"></p>
+    <button onclick="restartGame()">다시 하기</button>
+</div>
+
+<canvas id="gameCanvas" width="1000" height="550"></canvas>
+
+<script>
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const gravity = 0.7;
+
+let gameStarted = false;
+let gameEnded = false;
+
+let distance = 0;
+const targetDistance = 3000;
+
+const distanceUI = document.getElementById("distance");
+
+const player = {
+    x:150,
+    y:300,
+    width:40,
+    height:60,
+    vx:0,
+    vy:0,
+    speed:5,
+    jumping:false,
+    color:"#0066ff"
+};
+
+const teacher = {
+    x:20,
+    y:300,
+    width:40,
+    height:70,
+    speed:2,
+    color:"#ff3333"
+};
+
+const keys = {};
+
+let stairs = [];
+
+function createStairs(){
+
+    stairs = [];
+
+    let x = 0;
+    let y = 450;
+
+    for(let i=0;i<60;i++){
+
+        stairs.push({
+            x:x,
+            y:y,
+            width:140,
+            height:20
+        });
+
+        x += 120;
+
+        if(i % 2 === 0){
+            y -= 25;
+        }else{
+            y += 10;
+        }
+
+        if(y > 450) y = 450;
+        if(y < 150) y = 150;
+    }
+}
+
+createStairs();
+
+document.addEventListener("keydown", e=>{
+
+    keys[e.key] = true;
+
+    if((e.key === " " || e.key === "ArrowUp") && !player.jumping){
+        player.vy = -14;
+        player.jumping = true;
+    }
+});
+
+document.addEventListener("keyup", e=>{
+    keys[e.key] = false;
+});
+
+function startGame(){
+
+    gameStarted = true;
+
+    document.getElementById("startScreen").style.display = "none";
+}
+
+function endGame(win){
+
+    gameEnded = true;
+
+    const screen = document.getElementById("endScreen");
+    const title = document.getElementById("endTitle");
+    const text = document.getElementById("endText");
+
+    screen.style.display = "flex";
+
+    if(win){
+        title.innerHTML = "🏠 집 도착 성공!";
+        text.innerHTML = "무사히 선생님을 피했다!";
+    }else{
+        title.innerHTML = "😱 잡혔다!";
+        text.innerHTML = "선생님: 숙제 왜 안 했니?!";
+    }
+}
+
+function restartGame(){
+
+    gameEnded = false;
+    gameStarted = true;
+
+    distance = 0;
+    distanceUI.innerText = 0;
+
+    // 플레이어 초기화
+    player.x = 150;
+    player.y = 300;
+    player.vx = 0;
+    player.vy = 0;
+    player.jumping = false;
+
+    // 선생님 초기화
+    teacher.x = 20;
+    teacher.y = 300;
+    teacher.speed = 2;
+
+    // 계단 재생성
+    createStairs();
+
+    // 엔딩 화면 숨기기
+    document.getElementById("endScreen").style.display = "none";
+}
+
+function update(){
+
+    if(!gameStarted || gameEnded) return;
+
+    // 좌우 이동
+    if(keys["ArrowRight"]){
+        player.vx = player.speed;
+    }else if(keys["ArrowLeft"]){
+        player.vx = -player.speed;
+    }else{
+        player.vx = 0;
+    }
+
+    player.x += player.vx;
+
+    // 중력
+    player.vy += gravity;
+    player.y += player.vy;
+
+    // 계단 충돌
+    let onGround = false;
+
+    for(let stair of stairs){
+
+        if(
+            player.x + player.width > stair.x &&
+            player.x < stair.x + stair.width &&
+            player.y + player.height > stair.y &&
+            player.y + player.height < stair.y + 25 &&
+            player.vy >= 0
+        ){
+            player.y = stair.y - player.height;
+            player.vy = 0;
+            player.jumping = false;
+            onGround = true;
+        }
+    }
+
+    // 낙하
+    if(!onGround && player.y > canvas.height){
+        endGame(false);
+    }
+
+    // 카메라 스크롤
+    if(player.x > 400){
+
+        let moveSpeed = player.x - 400;
+
+        player.x = 400;
+
+        for(let stair of stairs){
+            stair.x -= moveSpeed;
+        }
+
+        teacher.x -= moveSpeed * 0.4;
+
+        distance += Math.floor(moveSpeed);
+
+        distanceUI.innerText = distance;
+    }
+
+    // 선생님 추격
+    teacher.x += teacher.speed;
+
+    // 난이도 증가
+    teacher.speed = 2 + distance / 1500;
+
+    // 선생님 위치 보정
+    if(teacher.y < 300){
+        teacher.y += 2;
+    }
+
+    // 충돌 체크
+    if(
+        player.x < teacher.x + teacher.width &&
+        player.x + player.width > teacher.x &&
+        player.y < teacher.y + teacher.height &&
+        player.y + player.height > teacher.y
+    ){
+        endGame(false);
+    }
+
+    // 클리어
+    if(distance >= targetDistance){
+        endGame(true);
+    }
+}
+
+function drawBackground(){
+
+    // 하늘
+    ctx.fillStyle = "#87ceeb";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // 해
+    ctx.fillStyle = "yellow";
+    ctx.beginPath();
+    ctx.arc(850,80,50,0,Math.PI*2);
+    ctx.fill();
+
+    // 학교
+    ctx.fillStyle = "#cccccc";
+    ctx.fillRect(50,120,180,180);
+
+    ctx.fillStyle = "#333";
+    ctx.fillRect(110,200,50,100);
+
+    ctx.fillStyle = "white";
+    ctx.font = "24px sans-serif";
+    ctx.fillText("학교",105,160);
+
+    // 집
+    let houseX = 850 - (targetDistance - distance) * 0.2;
+
+    if(houseX < 700){
+        houseX = 700;
+    }
+
+    ctx.fillStyle = "#ffcc99";
+    ctx.fillRect(houseX,250,120,100);
+
+    ctx.fillStyle = "#aa0000";
+    ctx.beginPath();
+    ctx.moveTo(houseX - 10,250);
+    ctx.lineTo(houseX + 60,180);
+    ctx.lineTo(houseX + 130,250);
+    ctx.fill();
+
+    ctx.fillStyle = "#663300";
+    ctx.fillRect(houseX + 45,300,30,50);
+}
+
+function drawPlayer(){
+
+    // 몸
+    ctx.fillStyle = player.color;
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+
+    // 얼굴
+    ctx.fillStyle = "#ffe0bd";
+    ctx.fillRect(player.x + 5, player.y - 20, 30, 25);
+
+    // 눈
+    ctx.fillStyle = "black";
+    ctx.fillRect(player.x + 10, player.y - 10, 4, 4);
+    ctx.fillRect(player.x + 24, player.y - 10, 4, 4);
+}
+
+function drawTeacher(){
+
+    // 몸
+    ctx.fillStyle = teacher.color;
+    ctx.fillRect(teacher.x, teacher.y, teacher.width, teacher.height);
+
+    // 얼굴
+    ctx.fillStyle = "#ffe0bd";
+    ctx.fillRect(teacher.x + 5, teacher.y - 20, 30, 25);
+
+    // 화난 눈
+    ctx.fillStyle = "black";
+    ctx.fillRect(teacher.x + 8, teacher.y - 12, 6, 3);
+    ctx.fillRect(teacher.x + 22, teacher.y - 12, 6, 3);
+}
+
+function drawStairs(){
+
+    for(let stair of stairs){
+
+        ctx.fillStyle = "#666";
+        ctx.fillRect(
+            stair.x,
+            stair.y,
+            stair.width,
+            stair.height
+        );
+
+        ctx.fillStyle = "#999";
+        ctx.fillRect(
+            stair.x,
+            stair.y,
+            stair.width,
+            5
+        );
+    }
+}
+
+function draw(){
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    drawBackground();
+    drawStairs();
+    drawTeacher();
+    drawPlayer();
+}
+
+function gameLoop(){
+
+    update();
+    draw();
+
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+
+</script>
+</body>
+</html>
